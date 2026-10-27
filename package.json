@@ -1,0 +1,10 @@
+{
+  "name": "star-tower-solver",
+  "version": "1.0.0",
+  "description": "Interactive 3D model and step-by-step solver for the Duncan Star Tower puzzle",
+  "private": true,
+  "scripts": {
+    "test": "node test/test.js",
+    "start": "npx --yes http-server -c-1 -p 8080 ."
+  }
+}

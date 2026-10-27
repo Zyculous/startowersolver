@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Star Tower Solver</title>
+<meta name="description" content="Interactive 3D model of the Duncan Star Tower puzzle with a step-by-step solver and algorithm library.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-1 -1 2 2'%3E%3Cpolygon fill='%23ffd31a' stroke='%231a1c34' stroke-width='.08' points='0,-1 .224,-.309 .951,-.309 .363,.118 .588,.809 0,.382 -.588,.809 -.363,.118 -.951,-.309 -.224,-.309'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1><svg class="star" viewBox="-1 -1 2 2" aria-hidden="true"><polygon fill="var(--pY)" stroke="var(--ink)" stroke-width=".08" stroke-linejoin="round" points="0,-1 .224,-.309 .951,-.309 .363,.118 .588,.809 0,.382 -.588,.809 -.363,.118 -.951,-.309 -.224,-.309"/></svg>Star Tower Solver</h1>
+      <p class="sub">A working 3D model of the three-layer pentagram cylinder: turn it, scramble it, enter your own puzzle's colors, and watch a step-by-step solve.</p>
+    </div>
+    <div class="swatches" aria-label="Puzzle colors">
+      <span class="sw" style="background:var(--pY)" title="Top: yellow"></span>
+      <span class="sw" style="background:var(--pG)" title="Bottom: green"></span>
+      <span style="margin:0 2px">·</span>
+      <span class="sw" style="background:var(--pW)" title="White"></span>
+      <span class="sw" style="background:var(--pR)" title="Red"></span>
+      <span class="sw" style="background:var(--pO)" title="Orange"></span>
+      <span class="sw" style="background:var(--pM)" title="Magenta"></span>
+      <span class="sw" style="background:var(--pB)" title="Blue"></span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="stagecol" aria-label="Puzzle">
+      <div class="stage">
+        <div id="three" role="img" aria-label="3D Star Tower puzzle. Drag to rotate the view."></div>
+        <div class="badge" id="badge"><i></i><span>Solved</span></div>
+        <div class="counter" id="counter">0 moves · 0 flips</div>
+        <div class="hint">Drag to look around · blue line marks the flip cut</div>
+      </div>
+      <div class="pad">
+        <div class="padrow" role="group" aria-label="Top layer">
+          <span class="lab">Top</span>
+          <button class="mv" data-m="U">U</button><button class="mv" data-m="U'">U'</button>
+          <button class="mv" data-m="U2">U2</button><button class="mv" data-m="U2'">U2'</button>
+        </div>
+        <div class="padrow" role="group" aria-label="Middle layer">
+          <span class="lab">Middle</span>
+          <button class="mv" data-m="E">E</button><button class="mv" data-m="E'">E'</button>
+          <button class="mv" data-m="E2">E2</button><button class="mv" data-m="E2'">E2'</button>
+        </div>
+        <div class="padrow" role="group" aria-label="Bottom layer">
+          <span class="lab">Bottom</span>
+          <button class="mv" data-m="D">D</button><button class="mv" data-m="D'">D'</button>
+          <button class="mv" data-m="D2">D2</button><button class="mv" data-m="D2'">D2'</button>
+        </div>
+        <div class="padrow"><button class="mv flip" data-m="/">/ &nbsp;flip the front cap</button></div>
+        <div class="tools">
+          <button class="btn" id="scramble">Scramble</button>
+          <button class="btn" id="reset">Reset</button>
+          <button class="btn" id="undo">Undo</button>
+          <label class="speed" for="speed">Speed <input id="speed" type="range" min="0.4" max="3" step="0.1" value="1"></label>
+        </div>
+      </div>
+      <div class="netbox" id="netbox">
+        <div class="netbar">
+          <span class="t" id="nettitle">Flat map · top, bottom, sides</span>
+          <div class="tools">
+            <button class="btn" id="editbtn">Enter my puzzle</button>
+          </div>
+        </div>
+        <div id="editbar" hidden>
+          <div class="netbar">
+            <div class="palette" id="palette" aria-label="Side color to paint"></div>
+            <div class="tools"><button class="btn" id="editcancel">Cancel</button><button class="btn primary" id="editload">Load into 3D</button></div>
+          </div>
+          <p class="small muted" style="margin-top:6px">Hold your puzzle with a star tip pointing at you and as much yellow on top as you can. Tap a side cell to paint it with the chosen color. Tap a top or bottom piece to toggle yellow/green.</p>
+        </div>
+        <div id="net"></div>
+        <div id="editmsg" class="msg err" hidden></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Workbench">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" aria-selected="true" data-tab="solve">Solve</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="algs">Algorithms</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="method">Method</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="notation">Notation</button>
+      </div>
+
+      <div class="tabbody" data-panel="solve">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h2>Solve the puzzle on screen</h2>
+          <p class="muted">Scramble the model, or tap <b>Enter my puzzle</b> and copy the colors from your real Star Tower. The solver follows the same three steps taught in the Method tab, so every move has a reason.</p>
+        </div>
+        <div class="tools">
+          <button class="btn primary" id="solvebtn">Find a solution</button>
+          <button class="btn" id="playbtn" disabled>Play</button>
+          <button class="btn" id="stepbtn" disabled>Next move</button>
+          <button class="btn" id="backbtn" disabled>Back</button>
+        </div>
+        <div id="solveout" class="levels"><p class="muted small">The model opens on a sample scramble. Press Find a solution, or Scramble for a new one.</p></div>
+      </div>
+
+      <div class="tabbody" data-panel="algs" hidden>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h2>Algorithms for common cases</h2>
+          <p class="muted">Each diagram shows the side strip unrolled, front at the gap marked ▼. Arrows show where pieces travel; Step 2 cards instead outline the wrong-colored pieces they fix. <b>Watch</b> sets up the case on a solved puzzle and plays the fix. <b>Apply</b> runs it on whatever is on screen now.</p>
+        </div>
+        <div id="alglist" class="alglist"></div>
+      </div>
+
+      <div class="tabbody" data-panel="method" hidden>
+        <h2>Three levels, one method</h2>
+        <p class="muted">The package lists three goals. Here is how to reach each one, in order. The full solve uses only about a dozen memorized moves.</p>
+        <div class="rule"><b>The golden rule.</b> The middle ring only changes when you turn it (E) or flip an odd number of times. So once the middle is right, use only U, D and an <b>even</b> number of flips, and it stays right.</div>
+        <div class="levels">
+          <div class="level" style="--lc:var(--pR)">
+            <span class="kicker">Beginner goal</span>
+            <h3>Two matching columns</h3>
+            <p>Turn the top and bottom layers until two columns line up with the middle. If a middle color is missing from a column, a single flip <code>/</code> brings a top or bottom piece into a new column. Experiment freely: two flips in a row always undo each other.</p>
+          </div>
+          <div class="level" style="--lc:var(--pO)">
+            <span class="kicker">Step 1 · Advanced</span>
+            <h3>Put the middle ring in order</h3>
+            <p>Going clockwise when seen from above, the middle must read <b>white, red, orange, magenta, blue</b>. Turn the middle with <code>E</code> so the two pieces you want to swap sit on either side of the front tip, then flip <code>/</code>. That swaps them. Repeat until the order is right. Top and bottom get mixed up while you do this, which is fine.</p>
+          </div>
+          <div class="level" style="--lc:var(--pY)">
+            <span class="kicker">Step 2 · Intermediate goal</span>
+            <h3>All yellow on top, all green on the bottom</h3>
+            <p>Each flip trades the front star point and the two front wedges between top and bottom. Use pairs of flips with U and D turns in between, such as <code>/ U2 /</code>, to move yellow pieces up. For the last stubborn pieces, use the <b>Point swap</b> and <b>Wedge face swap</b> algorithms. They keep the middle in place but shuffle side colors, which you fix next.</p>
+          </div>
+          <div class="level" style="--lc:var(--pB)">
+            <span class="kicker">Step 3 · Advanced goal</span>
+            <h3>Line up every column</h3>
+            <ol>
+              <li>Turn <code>U</code> to match as many top pieces to the middle as possible.</li>
+              <li>Fix the rest three at a time with the <b>Top 3-cycle</b> <code>U / U2 / U / U2 /</code>. Turn U before and undo the turn after to aim it at different pieces.</li>
+              <li>Do the same on the bottom with the <b>Bottom 3-cycle</b> <code>D / D2 / D / D2 /</code>.</li>
+              <li>If exactly two top pieces and two bottom pieces are swapped, use the <b>Double swap</b>. Swaps always come in such pairs because every flip moves wedges in pairs.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabbody" data-panel="notation" hidden>
+        <h2>How to read the moves</h2>
+        <p class="muted">Hold the puzzle with yellow on top and a top star tip pointing straight at you. The two columns on either side of that tip are the <b>front cap</b>, the chunk cut off by the colored line in the 3D view.</p>
+        <dl class="notation">
+          <dt>U</dt><dd>Turn the top layer one column (72°) clockwise, looking down from above. <kbd>u</kbd></dd>
+          <dt>U'</dt><dd>Top layer one column counter-clockwise. <kbd>y</kbd></dd>
+          <dt>U2</dt><dd>Top layer two columns (144°) clockwise. <code>U2'</code> goes the other way.</dd>
+          <dt>D</dt><dd>Bottom layer one column clockwise, as if you were looking up at the bottom. <kbd>d</kbd> / <kbd>s</kbd> for D'.</dd>
+          <dt>E</dt><dd>Middle layer, same direction as D. <kbd>e</kbd> / <kbd>w</kbd> for E'.</dd>
+          <dt>/</dt><dd>Flip the front cap 180° top-over-bottom, turning it around the axis that points at you. The cap's top and bottom pieces trade places and its two columns swap left and right. <kbd>space</kbd></dd>
+        </dl>
+        <div class="rule small">Five-sided layers have two turn sizes in each direction. A turn of three columns is the same as <code>U2'</code>, and five columns returns to the start.</div>
+        <h3>Position names used in the algorithms</h3>
+        <ul class="small">
+          <li><b>Front-left / front-right</b>: the two columns of the front cap.</li>
+          <li><b>Back-left / back-right</b>: the next column round on each side.</li>
+          <li><b>Back</b>: the column facing away from you.</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+  <footer>Unofficial fan-made solver for the Duncan Star Tower puzzle. Algorithms found by computer search over a model of the mechanism.</footer>
+</div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="js/logic.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
