@@ -50,22 +50,41 @@ function prism(poly, y0, y1) {
 }
 
 const host = document.getElementById('three');
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-host.appendChild(renderer.domElement);
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
-camera.position.set(1.3, 3.0, 5.2);
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.enablePan = false; controls.enableDamping = true; controls.minDistance = 3.6; controls.maxDistance = 9; controls.target.set(0, 0, 0);
-scene.add(new THREE.HemisphereLight(0xffffff, 0x50506a, 0.85));
-const key = new THREE.DirectionalLight(0xffffff, 0.75); key.position.set(3, 6, 4); scene.add(key);
-const fill = new THREE.DirectionalLight(0xffffff, 0.35); fill.position.set(-4, -2, -3); scene.add(fill);
-
+// 3D is optional: if three.js failed to download or WebGL is off, the rest of the app still works.
+let renderer = null, scene = null, camera = null, controls = null, guide = null;
+let has3D = false, threeProblem = null;
+function webglAvailable() {
+  try { const c = document.createElement('canvas'); return !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl'))); }
+  catch (e) { return false; }
+}
+try {
+  if (typeof THREE === 'undefined') throw Object.assign(new Error('three.js did not load'), { kind: 'nothree' });
+  if (!webglAvailable()) throw Object.assign(new Error('WebGL unavailable'), { kind: 'nowebgl' });
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  host.appendChild(renderer.domElement);
+  renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); showStageProblem('lost'); });
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+  camera.position.set(1.3, 3.0, 5.2); camera.lookAt(0, 0, 0);
+  if (typeof THREE.OrbitControls === 'function') {
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enablePan = false; controls.enableDamping = true; controls.minDistance = 3.6; controls.maxDistance = 9; controls.target.set(0, 0, 0);
+  } else threeProblem = 'nocontrols';
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x50506a, 0.85));
+  const key = new THREE.DirectionalLight(0xffffff, 0.75); key.position.set(3, 6, 4); scene.add(key);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.35); fill.position.set(-4, -2, -3); scene.add(fill);
+  guide = new THREE.Group(); scene.add(guide);
+  has3D = true;
+} catch (err) {
+  threeProblem = err.kind || 'nowebgl';
+  console.error('[Star Tower] 3D view disabled:', err);
+}
 const mats = {};
 function mat(hex) { if (!mats[hex]) mats[hex] = new THREE.MeshStandardMaterial({ color: new THREE.Color(hex), roughness: 0.42, metalness: 0.02 }); return mats[hex]; }
 const meshes = [];
 function buildMeshes() {
+  if (!has3D) return;
   meshes.forEach(m => { scene.remove(m); m.geometry.dispose(); });
   meshes.length = 0;
   const col = PCOL(); const dark = CSSV('--pK') || '#2a2b3a';
@@ -82,8 +101,8 @@ function buildMeshes() {
   });
 }
 // cut guide + front marker
-const guide = new THREE.Group(); scene.add(guide);
 function buildGuide() {
+  if (!has3D) return;
   while (guide.children.length) guide.remove(guide.children[0]);
   // accent ribbon laid along the cut line on the top and bottom faces
   const a = P(R, -72), b = P(R, 72); const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -97,8 +116,9 @@ function buildGuide() {
   guide.add(new THREE.Mesh(tg, new THREE.MeshBasicMaterial({ color: new THREE.Color(CSSV('--accent')), side: THREE.DoubleSide })));
 }
 const qY = (deg) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), deg * D2R);
-const qZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI);
+const qZ = has3D ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI) : null;
 function placeAll(s) {
+  if (!has3D) return;
   const where = {};
   const reg = (arr, L, kind) => arr.forEach((id, i) => { where[id] = { L, i, kind }; });
   reg(s.TW, 'T'); reg(s.MW, 'M'); reg(s.BW, 'B'); reg(s.TP, 'T'); reg(s.MP, 'M'); reg(s.BP, 'B');
@@ -111,7 +131,7 @@ function placeAll(s) {
     else { const mirrored = pc.kind === 'w' ? 4 - pc.slot : mod5(-pc.slot); m.quaternion.multiplyQuaternions(qY(72 * (w.i - mirrored)), qZ); }
   });
 }
-function resize() { const r = host.getBoundingClientRect(); const w = Math.max(1, r.width), h = Math.max(1, r.height); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+function resize() { if (!has3D) return; const r = host.getBoundingClientRect(); const w = Math.max(1, r.width), h = Math.max(1, r.height); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 new ResizeObserver(resize).observe(host);
 
 // ---------------- state, queue, animation ----------------
@@ -131,6 +151,7 @@ function enqueue(ms, opts = {}) { for (const m of ms) queue.push({ m, ...opts })
 function startNext() {
   if (anim || !queue.length) return;
   const job = queue.shift(); const m = job.m;
+  if (!has3D) { anim = { job, pivot: null, t0: performance.now(), dur: reduceMotion ? 1 : 140 / speed }; return; }
   const pivot = new THREE.Group(); scene.add(pivot);
   movingIds(state, m).forEach(id => pivot.attach(meshes[id]));
   const axis = m.L === '/' ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
@@ -140,7 +161,7 @@ function startNext() {
 }
 function finishAnim() {
   const { job, pivot } = anim;
-  [...pivot.children].forEach(c => scene.attach(c)); scene.remove(pivot);
+  if (pivot) { [...pivot.children].forEach(c => scene.attach(c)); scene.remove(pivot); }
   const prev = state; state = applyMove(state, job.m);
   if (job.undo) { const h = history.pop(); if (h) { moveCount--; if (h.move.L === '/') flipCount--; } }
   else { history.push({ state: prev, move: job.m }); moveCount++; if (job.m.L === '/') flipCount++; }
@@ -152,15 +173,18 @@ function finishAnim() {
 function tick(now) {
   if (anim) {
     const t = Math.min(1, (now - anim.t0) / anim.dur); const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-    anim.pivot.quaternion.setFromAxisAngle(anim.axis, anim.angle * e);
+    if (anim.pivot) anim.pivot.quaternion.setFromAxisAngle(anim.axis, anim.angle * e);
     if (t >= 1) finishAnim();
   }
   if (!anim) startNext();
-  controls.update(); renderer.render(scene, camera);
+  if (has3D) {
+    try { if (controls) controls.update(); renderer.render(scene, camera); }
+    catch (err) { has3D = false; console.error('[Star Tower] render failed:', err); showStageProblem('render'); }
+  }
   requestAnimationFrame(tick);
 }
 function setStateInstant(s, clearHistory = true) {
-  queue.length = 0; if (anim) { [...anim.pivot.children].forEach(c => scene.attach(c)); scene.remove(anim.pivot); anim = null; }
+  queue.length = 0; if (anim) { if (anim.pivot) { [...anim.pivot.children].forEach(c => scene.attach(c)); scene.remove(anim.pivot); } anim = null; }
   state = s; if (clearHistory) { history = []; moveCount = 0; flipCount = 0; }
   placeAll(state); markSolutionStale(); refreshUI();
 }
@@ -379,7 +403,20 @@ document.getElementById('alglist').addEventListener('click', (e) => {
 });
 
 // ---------------- boot ----------------
-function rebuildColors() { Object.keys(mats).forEach(k => { mats[k].dispose(); delete mats[k]; }); buildMeshes(); buildGuide(); placeAll(state); renderNet(); renderAlgs(); if (editing) renderPalette(); }
+function rebuildColors() { if (!has3D) { renderNet(); renderAlgs(); if (editing) renderPalette(); return; } Object.keys(mats).forEach(k => { mats[k].dispose(); delete mats[k]; }); buildMeshes(); buildGuide(); placeAll(state); renderNet(); renderAlgs(); if (editing) renderPalette(); }
+function showStageProblem(kind) {
+  const box = document.getElementById('stageproblem'); if (!box) return;
+  const msgs = {
+    nothree: '<b>The 3D library could not be downloaded.</b> three.js comes from public CDNs (cdnjs, jsDelivr, unpkg) and all of them were blocked or unreachable. An ad or script blocker, a school or work network filter, or being offline usually causes this. Allow those sites, or try another network.',
+    nowebgl: '<b>WebGL is turned off in this browser, so the 3D view cannot start.</b> In Chrome open <span class="mono">Settings › System</span>, turn on <i>Use graphics acceleration when available</i>, and relaunch Chrome. <span class="mono">chrome://gpu</span> shows whether WebGL is enabled.',
+    lost: '<b>The graphics card stopped the 3D view.</b> Reload the page. If it keeps happening, close other heavy tabs or restart the browser.',
+    render: '<b>The 3D view hit an error while drawing.</b> Reload the page. If it keeps happening, check that WebGL is on at <span class="mono">chrome://gpu</span>.',
+  };
+  box.innerHTML = (msgs[kind] || msgs.nowebgl) + '<br><span class="small muted">Everything else still works: moves, scrambles and the solver update the flat map below.</span>';
+  box.hidden = false;
+  document.querySelector('.hint').hidden = true;
+}
+if (!has3D) showStageProblem(threeProblem);
 buildMeshes(); buildGuide(); placeAll(state); resize(); renderAlgs(); refreshUI();
 try { const t = localStorage.getItem('st-tab'); if (t) selectTab(t); } catch (e) {}
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rebuildColors);
