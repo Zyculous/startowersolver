@@ -9,7 +9,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=2">
+<style>.stageproblem{position:absolute;left:14px;right:14px;top:52px;z-index:2;line-height:1.45;border:1px solid var(--line)}</style>
 </head>
 <body>
 <div class="wrap">
@@ -36,6 +37,7 @@
         <div id="three" role="img" aria-label="3D Star Tower puzzle. Drag to rotate the view."></div>
         <div class="badge" id="badge"><i></i><span>Solved</span></div>
         <div class="counter" id="counter">0 moves · 0 flips</div>
+        <div class="stageproblem msg" id="stageproblem" role="alert" hidden></div>
         <div class="hint">Drag to look around · blue line marks the flip cut</div>
       </div>
       <div class="pad">
@@ -169,9 +171,47 @@
 </div>
 
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="js/logic.js"></script>
-<script src="js/app.js"></script>
+<script>
+// Show any startup error on the page instead of failing silently.
+window.addEventListener('error', function (e) {
+  var box = document.getElementById('stageproblem');
+  if (!box || !box.hidden) return;
+  box.textContent = 'Something went wrong while starting: ' + (e.message || 'unknown error') + '. Try reloading the page.';
+  box.hidden = false;
+});
+// Load three.js with fallbacks (a blocked CDN should not break the page), then the app.
+// The ?v= number busts browser caches; bump it whenever js/ or css/ change.
+(function () {
+  var VERSION = '2';
+  var THREE_SRC = [
+    'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js',
+    'https://unpkg.com/three@0.128.0/build/three.min.js'
+  ];
+  var CONTROLS_SRC = [
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js',
+    'https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js'
+  ];
+  function addScript(src, onload, onerror) {
+    var s = document.createElement('script');
+    s.src = src; s.async = false; s.onload = onload; s.onerror = onerror;
+    document.body.appendChild(s);
+  }
+  function firstThatLoads(list, done) {
+    var i = 0;
+    (function next() {
+      if (i >= list.length) return done(false);
+      addScript(list[i++], function () { done(true); }, next);
+    })();
+  }
+  function startApp() {
+    addScript('js/logic.js?v=' + VERSION, function () { addScript('js/app.js?v=' + VERSION); });
+  }
+  firstThatLoads(THREE_SRC, function (ok) {
+    if (!ok) return startApp();
+    firstThatLoads(CONTROLS_SRC, startApp);
+  });
+})();
+</script>
 </body>
 </html>
